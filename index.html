@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>HRA Completion Journey</title>
+<style>
+:root{--bg:#F4F6F8;--surface:#FFFFFF;--ink:#18212B;--muted:#5B6776;--line:#D8DEE5;--flow:#2D5BC9;--gap:#C8501F}
+@media (prefers-color-scheme: dark){:root{--bg:#11161C;--surface:#1A2129;--ink:#E9EEF3;--muted:#9AA6B3;--line:#2E3842;--flow:#7FA2F2;--gap:#F08A5B;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;padding:16px}
+form{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:28px 26px;display:grid;gap:14px}
+h1{margin:0;font-size:22px;letter-spacing:-.01em}
+p{margin:0;color:var(--muted);font-size:14px}
+label{font-weight:600;font-size:13px}
+input{font:inherit;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
+input:focus{outline:none;border-color:var(--flow)}
+button{font:600 15px system-ui,sans-serif;border:0;border-radius:999px;padding:11px 18px;background:var(--flow);color:#fff;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+button:focus-visible{outline:3px solid var(--flow);outline-offset:2px}
+.err{color:var(--gap);font-size:14px;min-height:1.4em}
+</style>
+</head>
+<body>
+<form id="gate" autocomplete="off">
+  <h1>HRA Completion Journey</h1>
+  <p>This page is private. Enter the password you were given.</p>
+  <div style="display:grid;gap:6px">
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autofocus required>
+  </div>
+  <button id="go" type="submit">Open</button>
+  <div class="err" id="err" role="alert"></div>
+</form>
+<script>
+// The page content ships only as AES-256-GCM ciphertext (payload.enc.json).
+// A wrong password fails GCM authentication, so decryption itself is the check.
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+document.getElementById('gate').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('go'), err = document.getElementById('err');
+  btn.disabled = true; btn.textContent = 'Opening…'; err.textContent = '';
+  try {
+    const p = await (await fetch('payload.enc.json', { cache: 'no-store' })).json();
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(document.getElementById('pw').value), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(p.salt), iterations: p.iter }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(p.iv) }, key, b64(p.ct));
+    const html = new TextDecoder().decode(plain);
+    document.open(); document.write(html); document.close();
+  } catch (x) {
+    err.textContent = 'That password did not work. Check it and try again.';
+    btn.disabled = false; btn.textContent = 'Open';
+  }
+});
+</script>
+</body>
+</html>
